@@ -1,6 +1,6 @@
 @kernel void copyVectors(const int entries,
-                        const float *a,
-                        float *b) {
+                        const double *a,
+                        double *b) {
   for (int i = 0; i < entries; ++i; @tile(4, @outer, @inner)) {
     b[i] = a[i];
   }
