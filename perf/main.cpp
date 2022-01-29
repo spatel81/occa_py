@@ -22,7 +22,7 @@
 constexpr int NX = 1<<20; // number of points in spatial discretization
 
 occa::json parseArgs(int argc, const char **argv);
-void PyIt(PyObject *p_func, float *u);
+void PyIt(PyObject *p_func, double *u);
 
 int main(int argc, const char **argv) {
 
@@ -52,11 +52,11 @@ int main(int argc, const char **argv) {
 
   int entries = NX;
 
-  float *a  = new float[entries];
-  float *b  = new float[entries];
+  double *a  = new double[entries];
+  double *b  = new double[entries];
 
   for (int i = 0; i < entries; ++i) {
-    a[i]  = i;
+    a[i]  = 1.0;
     b[i]  = 0;
   }
 
@@ -71,11 +71,11 @@ int main(int argc, const char **argv) {
    });
 
   // Allocate memory on the device
-  o_a = device.malloc<float>(entries);
-  o_b = device.malloc<float>(entries);
+  o_a = device.malloc<double>(entries);
+  o_b = device.malloc<double>(entries);
   
   //Get Backend Pointer
-  float *d_b = static_cast<float *>(o_b.ptr());
+  double *d_b = static_cast<double *>(o_b.ptr());
 
   // Compile the kernel at run-time
   occa::kernel copyVectors = device.buildKernel("copyVectors.okl","copyVectors");
@@ -87,11 +87,11 @@ int main(int argc, const char **argv) {
   // Launch device kernel
   copyVectors(entries, o_a, o_b);
 
-  int Ntests=100;
+  int Ntests=1000;
+  // D->H->D
   auto walltime_start = std::chrono::high_resolution_clock::now();
   for(int test = 0; test < Ntests; ++test) {
 
-      std::cout << "Iter : " << test << std::endl;
       // Run the OCCA kernel
       copyVectors(entries, o_a, o_b);
 
@@ -100,17 +100,37 @@ int main(int argc, const char **argv) {
 
       // Pass data through Python-Interpreter
       PyIt(pmy_func1, b);      
-      //PyIt(pmy_func2, d_b);      
 
   }
   auto walltime_finish = std::chrono::high_resolution_clock::now();
   double wallTime = std::chrono::duration<double,std::milli>(walltime_finish-walltime_start).count(); 
-  std::cout << "Total mean wallTime : " << wallTime/Ntests << std::endl;
+  std::cout << "DHD total mean wallTime : " << wallTime/Ntests << std::endl;
+  
+  // Assert values
+  for (int i = 0; i < entries; ++i) {
+    if (!occa::areBitwiseEqual(b[i], a[i])) {
+      throw 1;
+    }
+  }
+  
+  walltime_start = std::chrono::high_resolution_clock::now();
+  for(int test = 0; test < Ntests; ++test) {
+
+      // Run the OCCA kernel
+      copyVectors(entries, o_a, o_b);
+
+      // Pass data through Python-Interpreter
+      PyIt(pmy_func2, d_b);      
+
+  }
+  walltime_finish = std::chrono::high_resolution_clock::now();
+  wallTime = std::chrono::duration<double,std::milli>(walltime_finish-walltime_start).count(); 
+  std::cout << "DD total mean wallTime : " << wallTime/Ntests << std::endl;
 
   o_b.copyTo(b);
   // Assert values
   for (int i = 0; i < entries; ++i) {
-    if (!occa::areBitwiseEqual(b[i], a[i])) {
+    if (!occa::areBitwiseEqual(b[i], 50*a[i])) {
       throw 1;
     }
   }
@@ -145,7 +165,7 @@ occa::json parseArgs(int argc, const char **argv) {
   return args;
 }
 
-void PyIt(PyObject *p_func, float *u)
+void PyIt(PyObject *p_func, double *u)
 {
   PyObject* pArgs = PyTuple_New(1);
 
@@ -153,12 +173,12 @@ void PyIt(PyObject *p_func, float *u)
   npy_intp dim[] = {NX};
 
   // create a new Python array that is a wrapper around u (not a copy) and put it in tuple pArgs
-  PyObject* array_1d = PyArray_SimpleNewFromData(1, dim, NPY_FLOAT32, u);
+  PyObject* array_1d = PyArray_SimpleNewFromData(1, dim, NPY_FLOAT64, u);
   PyTuple_SetItem(pArgs, 0, array_1d);
 
   // pass array into our Python function and cast result to PyArrayObject
   PyArrayObject* pValue = (PyArrayObject*) PyObject_CallObject(p_func, pArgs);
-  std::cout << "Called python data collection function successfully"<<std::endl;
+  //std::cout << "Called python data collection function successfully"<<std::endl;
 
   Py_DECREF(pArgs);
   Py_DECREF(pValue);

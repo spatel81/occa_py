@@ -24,11 +24,9 @@ from cupy.cuda import memory
 
 def my_function1(a):
     b = cupy.asarray(a)
-    print("In Python: CALC Start H->D")
     b *= 5 
     b *= b 
     b += b 
-    print("In Python: CALC DONE H->D")
 
 def my_function2(a):
     b = cupy.ndarray(
@@ -40,8 +38,6 @@ def my_function2(a):
                                            a,
                                            0), 0),
                 strides=a.__array_interface__['strides'])
-    print("In Python: CALC Start H->D")
     b *= 5 
     b *= b 
     b += b 
-    print("In Python: CALC DONE H->D")
